@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animasjon av Standardavvik</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        canvas {
+            background-color: #f9fafb; /* gray-50 */
+            border: 1px solid #d1d5db; /* gray-300 */
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white p-6 md:p-8 rounded-xl shadow-lg text-center max-w-3xl w-full">
+        <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Visualisering av Standardavvik</h1>
+        <p class="text-gray-600 mb-6">Juster spredningen på datapunktene for å se hvordan standardavviket endrer seg.</p>
+
+        <!-- Canvas for the visualization -->
+        <canvas id="vizCanvas" width="700" height="250" class="mx-auto"></canvas>
+
+        <div class="mt-6 flex flex-col md:flex-row items-center justify-center gap-6 md:gap-8">
+            <!-- Controls for spread -->
+            <div class="w-full md:w-1/2">
+                <label for="spreadSlider" class="block text-lg font-medium text-gray-700">Spredning</label>
+                <input id="spreadSlider" type="range" min="5" max="100" value="30" step="1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2">
+            </div>
+            <!-- Display for Standard Deviation -->
+            <div class="text-center">
+                 <p class="text-lg font-medium text-gray-700">Standardavvik (σ)</p>
+                 <p id="stdDevValue" class="text-3xl font-bold text-blue-600 mt-1">0.00</p>
+            </div>
+             <!-- Button to get new data -->
+            <button id="newDataBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-transform transform hover:scale-105">
+                Nye data
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- Setup ---
+        const canvas = document.getElementById('vizCanvas');
+        const ctx = canvas.getContext('2d');
+        const spreadSlider = document.getElementById('spreadSlider');
+        const stdDevValueDisplay = document.getElementById('stdDevValue');
+        const newDataBtn = document.getElementById('newDataBtn');
+
+        const canvasCenterY = canvas.height / 2;
+        const pointCount = 50;
+        let dataPoints = [];
+
+        // --- Calculation Functions ---
+
+        /**
+         * Calculates the mean (average) of an array of numbers.
+         * @param {number[]} data - The array of numbers.
+         * @returns {number} The mean.
+         */
+        function calculateMean(data) {
+            if (data.length === 0) return 0;
+            const sum = data.reduce((acc, val) => acc + val, 0);
+            return sum / data.length;
+        }
+
+        /**
+         * Calculates the standard deviation of an array of numbers.
+         * @param {number[]} data - The array of numbers.
+         * @returns {number} The standard deviation.
+         */
+        function calculateStdDev(data) {
+            const mean = calculateMean(data);
+            if (data.length < 2) return 0; // Std dev is 0 for 0 or 1 points
+            const squareDiffs = data.map(value => (value - mean) ** 2);
+            const avgSquareDiff = calculateMean(squareDiffs);
+            return Math.sqrt(avgSquareDiff);
+        }
+
+        /**
+         * Generates a new set of random data points.
+         * The spread is controlled by the slider.
+         */
+        function generateData() {
+            const spread = parseInt(spreadSlider.value);
+            const meanValue = canvas.width / 2; // Center the data visually
+            dataPoints = [];
+            for (let i = 0; i < pointCount; i++) {
+                // Generate random numbers with a normal-like distribution using the Box-Muller transform for a more natural look
+                const u1 = Math.random();
+                const u2 = Math.random();
+                const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+                dataPoints.push(meanValue + z * spread);
+            }
+        }
+
+        // --- Drawing Functions ---
+
+        /**
+         * Draws the main horizontal axis.
+         */
+        function drawAxis() {
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = '#9ca3af'; // gray-400
+            ctx.lineWidth = 2;
+            ctx.moveTo(0, canvasCenterY);
+            ctx.lineTo(canvas.width, canvasCenterY);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        /**
+         * Draws the data points on the canvas.
+         */
+        function drawDataPoints() {
+            ctx.save();
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.7)'; // red-500 with transparency
+            dataPoints.forEach(point => {
+                ctx.beginPath();
+                // Add a small random vertical offset to prevent perfect overlap
+                const yJitter = (Math.random() - 0.5) * 40;
+                ctx.arc(point, canvasCenterY + yJitter, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+            ctx.restore();
+        }
+        
+        /**
+         * Draws the mean and the standard deviation range.
+         * @param {number} mean - The calculated mean.
+         * @param {number} stdDev - The calculated standard deviation.
+         */
+        function drawStats(mean, stdDev) {
+            ctx.save();
+            
+            // Draw standard deviation range (the blue area)
+            ctx.fillStyle = 'rgba(59, 130, 246, 0.2)'; // blue-500 with transparency
+            ctx.fillRect(mean - stdDev, 0, stdDev * 2, canvas.height);
+
+            // Draw mean line
+            ctx.beginPath();
+            ctx.strokeStyle = '#1d4ed8'; // blue-700
+            ctx.lineWidth = 3;
+            ctx.moveTo(mean, 0);
+            ctx.lineTo(mean, canvas.height);
+            ctx.stroke();
+            
+            // Add text for the mean
+            ctx.fillStyle = '#1d4ed8';
+            ctx.font = 'bold 12px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText('Gjennomsnitt', mean, 20);
+
+            ctx.restore();
+        }
+
+        /**
+         * Main update function to orchestrate everything.
+         */
+        function updateVisualization() {
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Calculate stats
+            const mean = calculateMean(dataPoints);
+            const stdDev = calculateStdDev(dataPoints);
+            stdDevValueDisplay.textContent = (stdDev / 10).toFixed(2); // Scale for display
+
+            // Draw components
+            drawAxis();
+            drawStats(mean, stdDev);
+            drawDataPoints(); // Draw points on top
+        }
+        
+        /**
+         * Handles slider input by regenerating data and updating the view.
+         */
+        function handleSliderChange() {
+            generateData();
+            updateVisualization();
+        }
+
+        // --- Event Listeners ---
+        spreadSlider.addEventListener('input', handleSliderChange);
+        newDataBtn.addEventListener('click', handleSliderChange);
+
+        // --- Initial Draw ---
+        window.onload = () => {
+            generateData();
+            updateVisualization();
+        };
+    </script>
+
+</body>
+</html>
